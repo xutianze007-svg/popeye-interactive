@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>BLUTO Take a Swing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#f3e6c4;
+    --bg:#2f6f99;
+    --cur:52px;            /* crosshair size */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);overflow:hidden;color-scheme:light}
+  body{font-family:Montserrat,"Helvetica Neue",Arial,sans-serif;color:var(--cream);
+       -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+
+  .stage{position:fixed;inset:0;overflow:hidden;cursor:none;touch-action:manipulation}
+  .media{position:absolute;inset:0;will-change:transform;transform:translateZ(0)}
+  .media img,.media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+       object-position:50% 30%;pointer-events:none;backface-visibility:hidden}
+  .media video{opacity:0;transition:opacity 90ms linear}
+  .media video.on{opacity:1}
+
+  /* impact: short push + settle, direction follows the punch */
+  .media.hit-l{animation:hitL 320ms cubic-bezier(.2,.8,.3,1)}
+  .media.hit-r{animation:hitR 320ms cubic-bezier(.2,.8,.3,1)}
+  @keyframes hitL{0%{transform:translate3d(0,0,0) scale(1)}
+    18%{transform:translate3d(16px,-5px,0) scale(1.018)}
+    42%{transform:translate3d(-6px,2px,0) scale(1.008)}
+    70%{transform:translate3d(2px,-1px,0) scale(1.002)}100%{transform:translate3d(0,0,0) scale(1)}}
+  @keyframes hitR{0%{transform:translate3d(0,0,0) scale(1)}
+    18%{transform:translate3d(-16px,-5px,0) scale(1.018)}
+    42%{transform:translate3d(6px,2px,0) scale(1.008)}
+    70%{transform:translate3d(-2px,-1px,0) scale(1.002)}100%{transform:translate3d(0,0,0) scale(1)}}
+
+  /* ---------- negative (difference) crosshair ---------- */
+  .cursor{position:fixed;left:0;top:0;width:var(--cur);height:var(--cur);margin:calc(var(--cur)/-2) 0 0 calc(var(--cur)/-2);
+          pointer-events:none;z-index:10;mix-blend-mode:difference;opacity:0;transition:opacity .2s;will-change:transform}
+  .cursor.show{opacity:1}
+  .cursor svg{width:100%;height:100%;display:block;transition:transform 160ms cubic-bezier(.2,.8,.3,1)}
+  .cursor.down svg{transform:scale(.78) rotate(45deg)}
+  .cursor .ring{position:absolute;inset:0;border:2px solid #fff;border-radius:50%;opacity:0;transform:scale(.4)}
+  .cursor.pulse .ring{animation:ring 380ms ease-out}
+  @keyframes ring{0%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(1.5)}}
+  @media (pointer:coarse){.cursor{display:none}}
+
+  .copy{position:absolute;top:clamp(16px,4.6vh,44px);font-weight:600;font-size:clamp(10px,1.05vw,17px);
+        letter-spacing:.32em;text-transform:uppercase;pointer-events:none;text-shadow:0 1px 10px rgba(0,0,0,.18)}
+  .copy.tl{left:clamp(16px,3.1vw,52px)}
+  .copy.tr{right:clamp(16px,3.1vw,52px);letter-spacing:.24em}
+
+  /* power-up ring: placed in video-frame coordinates around the can that is in the footage */
+  .power{position:absolute;left:0;top:0;width:var(--d,120px);height:var(--d,120px);border:0;background:none;padding:0;
+         transform:translate(-50%,-50%);cursor:none;z-index:60;color:#f3e6c4;
+         transition:opacity .4s ease, transform .5s cubic-bezier(.2,.8,.3,1)}
+  .power .glow{position:absolute;inset:14%;border-radius:50%;
+         background:radial-gradient(circle,rgba(255,236,190,.28) 0%,rgba(255,236,190,.10) 45%,rgba(255,236,190,0) 70%);
+         animation:glow 2.4s ease-in-out infinite}
+  .power svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .power .spin{transform-origin:50% 50%;animation:spin 14s linear infinite}
+  .power .inner{transition:transform .35s cubic-bezier(.2,.8,.3,1);transform-origin:50% 50%}
+  .power:hover .inner{transform:scale(.94)}
+  .power:hover .spin{animation-duration:5s}
+  .power .label{position:absolute;left:50%;top:calc(100% + var(--d)*.06);transform:translateX(-50%);white-space:nowrap;
+         display:flex;align-items:center;gap:calc(var(--d)*.05);
+         font-weight:700;letter-spacing:.3em;font-size:calc(var(--d)*.068);text-shadow:0 1px 8px rgba(0,0,0,.25)}
+  .power .label::before,.power .label::after{content:"";width:calc(var(--d)*.09);height:1px;background:currentColor;opacity:.7}
+  .power.gone{opacity:0;transform:translate(-50%,-50%) scale(1.35);pointer-events:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes glow{0%,100%{opacity:.6;transform:scale(.92)}50%{opacity:1;transform:scale(1.05)}}
+  .media #vEat{opacity:1;z-index:50;transition:opacity .28s ease}
+  .media #vEat.off{opacity:0}
+  .badge{position:absolute;right:clamp(12px,1.9vw,34px);bottom:clamp(110px,27vh,300px);
+         width:clamp(96px,11vw,190px);pointer-events:none;
+         filter:drop-shadow(0 6px 18px rgba(0,0,0,.25));animation:bob 3.2s ease-in-out infinite}
+  .badge img{width:100%;display:block}
+  @keyframes bob{50%{transform:translateY(-6px)}}
+
+  .count{position:absolute;left:clamp(16px,3.1vw,52px);bottom:clamp(16px,4vh,40px);font-weight:700;
+         font-size:clamp(10px,.9vw,14px);letter-spacing:.3em;opacity:0;transition:opacity .4s;pointer-events:none;
+         font-variant-numeric:tabular-nums}
+  .count.show{opacity:.85}
+
+  .loader{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);
+          font-weight:700;letter-spacing:.4em;font-size:12px;transition:opacity .6s ease;z-index:20}
+  .loader.done{opacity:0;pointer-events:none}
+  .stage{opacity:0;transition:opacity .6s ease}
+  .stage.ready{opacity:1}
+
+  @media (prefers-reduced-motion:reduce){.badge{animation:none}.media.hit-l,.media.hit-r{animation:none}}
+</style>
+</head>
+<body>
+<div class="loader" id="loader">LOADING</div>
+<main class="stage" id="stage">
+  <div class="media" id="media">
+    <img src="media/idle-v5.jpg" alt="" id="idle">
+    <video id="vIdle" preload="auto" muted playsinline webkit-playsinline loop class="on" style="z-index:1"></video>
+    <img src="media/eat-first-v7.jpg" alt="" id="eatPoster" style="z-index:49;transition:opacity .28s ease">
+    <video id="vEat" preload="auto" muted playsinline webkit-playsinline poster="media/eat-first-v7.jpg"></video>
+    <video id="vL" preload="auto" muted playsinline webkit-playsinline></video>
+    <video id="vR" preload="auto" muted playsinline webkit-playsinline></video>
+  </div>
+
+  <div class="copy tl">Take a swing</div>
+  <div class="copy tr">Eat. Punch. Repeat.</div>
+  <button class="power" id="power" aria-label="Eat the spinach">
+    <span class="glow"></span>
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <g class="spin"><circle cx="50" cy="50" r="49" fill="none" stroke="currentColor" stroke-opacity=".75" stroke-width=".6" stroke-dasharray="1.2 3.2"/></g>
+      <g class="inner"><circle cx="50" cy="50" r="43" fill="none" stroke="currentColor" stroke-width="1.1"/>
+        <path d="M50 3v5M50 92v5M3 50h5M92 50h5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></g>
+    </svg>
+    <span class="label">POWER UP</span></button>
+  <div class="count" id="count"></div>
+</main>
+
+<div class="cursor" id="cursor" aria-hidden="true">
+  <svg viewBox="0 0 52 52"><g stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none">
+    <path d="M26 5v13M26 34v13M5 26h13M34 26h13"/></g><circle cx="26" cy="26" r="2.6" fill="#fff"/></svg>
+  <div class="ring"></div>
+</div>
+
+<script>
+(() => {
+  // ---------- tuning ----------
+  const SRC_W = 1920, SRC_H = 1080;     // source frame size
+  const SPLIT_X = 945;                  // nose centre in source pixels -> left / right divider
+  const CLIP = {
+    // impact = fist lands; ret = from here a new click cuts in immediately
+    L: { src:'media/punch-left-v5.mp4',  impact:0.42, ret:0.52 },
+    R: { src:'media/punch-right-v5.mp4', impact:0.50, ret:0.60 },
+  };
+
+  const stage = document.getElementById('stage');
+  const media = document.getElementById('media');
+  const loader= document.getElementById('loader');
+  const countEl=document.getElementById('count');
+  const cursor= document.getElementById('cursor');
+  const vids  = { L: document.getElementById('vL'), R: document.getElementById('vR') };
+  const idleV = document.getElementById('vIdle');
+  const IDLE_SRC = 'media/idle-loop-v5.mp4';
+  const FADE_OUT = 160;   // ms: punch clip dissolves back into the laughing loop
+
+  // ---------- intro: skinny arms -> eat spinach -> power up ----------
+  const eatV = document.getElementById('vEat');
+  const power = document.getElementById('power');
+  const CAN = { x:1780, y:652, d:245 };   // can centre + ring diameter, source pixels
+  let armed = false, eating = false;
+  const eatPoster = document.getElementById('eatPoster');
+  const CAN_RIGHT = 1915;                 // keep the can's right edge on screen
+  let LAY = { s:1, offX:0, offY:0 };
+  function place(){
+    const vw = innerWidth, vh = innerHeight, s = Math.max(vw / SRC_W, vh / SRC_H);
+    const crop = vw - SRC_W * s;            // <= 0 : how much width is cropped
+    let px = 0.5;
+    if (crop < 0){ const need = vw - CAN_RIGHT * s - 8; px = Math.min(1, Math.max(0.5, need / crop)); }
+    const offX = crop * px, offY = (vh - SRC_H * s) * 0.30;
+    LAY = { s, offX, offY };
+    document.querySelectorAll('.media img, .media video').forEach(el => el.style.objectPosition = `${px*100}% 30%`);
+    power.style.left = (offX + CAN.x * s) + 'px';
+    power.style.top  = (offY + CAN.y * s) + 'px';
+    power.style.setProperty('--d', (CAN.d * s) + 'px');
+  }
+  place(); addEventListener('resize', place);
+  async function loadEat(){
+    try{ eatV.src = URL.createObjectURL(await (await fetch('media/eat-v7.mp4')).blob()); }catch(e){ eatV.src = 'media/eat-v7.mp4'; }
+    await new Promise(r => { if (eatV.readyState >= 3) r(); else { eatV.addEventListener('canplaythrough', r, {once:true}); eatV.addEventListener('error', r, {once:true}); } });
+  }
+  function eat(){
+    if (eating || armed) return;
+    eating = true;
+    power.classList.add('gone');
+    eatV.currentTime = 0;
+    const go = () => { eatPoster.style.opacity = 0; };
+    if ('requestVideoFrameCallback' in eatV) eatV.requestVideoFrameCallback(go); else eatV.addEventListener('playing', go, {once:true});
+    eatV.play().catch(()=>{});
+  }
+  const ARM_AT = 2.75;   // s into the eat clip: fists are back up -> punching allowed
+  function finishEat(){
+    if (!eating) return;
+    eating = false; armed = true;
+    idleV.currentTime = 0; idleV.play().catch(()=>{});
+    eatV.classList.add('off'); eatPoster.style.opacity = 0;
+    setTimeout(() => eatV.pause(), 400);
+  }
+  const watchEat = () => {
+    if (!eating) return;
+    if (eatV.currentTime >= ARM_AT) armed = true;
+    if ('requestVideoFrameCallback' in eatV) eatV.requestVideoFrameCallback(watchEat);
+  };
+  eatV.addEventListener('play', watchEat);
+  eatV.addEventListener('timeupdate', watchEat);
+  eatV.addEventListener('ended', finishEat);
+  power.addEventListener('pointerdown', e => { e.stopPropagation(); eat();
+    cursor.classList.remove('pulse'); void cursor.offsetWidth; cursor.classList.add('pulse'); });
+
+  let active = null, activeSide = null, queued = null, hits = 0, shakeT = 0, z = 2;
+
+  // ---------- load: fetch into memory so restarting is instant ----------
+  async function loadClip(side){
+    const v = vids[side];
+    try{
+      const blob = await (await fetch(CLIP[side].src)).blob();
+      v.src = URL.createObjectURL(blob);
+    }catch(e){ v.src = CLIP[side].src; }
+    await new Promise(r => { if (v.readyState >= 3) r(); else { v.addEventListener('canplaythrough', r, {once:true}); v.addEventListener('error', r, {once:true}); } });
+    // warm the decoder so the very first punch has no hitch
+    try{ await v.play(); v.pause(); v.currentTime = 0; }catch(e){}
+  }
+  const reveal = () => { loader.classList.add('done'); stage.classList.add('ready'); };
+  async function loadIdle(){
+    try{ idleV.src = URL.createObjectURL(await (await fetch(IDLE_SRC)).blob()); }catch(e){ idleV.src = IDLE_SRC; }
+    await new Promise(r => { if (idleV.readyState >= 3) r(); else { idleV.addEventListener('canplaythrough', r, {once:true}); idleV.addEventListener('error', r, {once:true}); } });
+    try{ await idleV.play(); }catch(e){}
+  }
+  Promise.all([loadClip('L'), loadClip('R'), loadIdle(), loadEat()]).then(reveal);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) idleV.play().catch(()=>{}); });
+  setTimeout(reveal, 5000);
+
+  // ---------- which side? map the pointer into source-frame pixels (object-fit: cover) ----------
+  function sideAt(clientX){
+    return (clientX - LAY.offX) / LAY.s < SPLIT_X ? 'L' : 'R';
+  }
+
+  // ---------- punch ----------
+  function punch(side){
+    if (!armed) return;                 // eat the spinach first
+    if (eating){ finishEat(); }         // punch straight out of the eating clip's tail
+    if (active && !active.paused && !active.ended){
+      // still swinging forward -> queue; already on the way back -> cut in right away
+      if (active.currentTime < CLIP[activeSide].ret){ queued = side; return; }
+    }
+    const v = vids[side];
+    v.currentTime = 0;
+    v.style.zIndex = ++z;
+    const p = v.play(); if (p && p.catch) p.catch(()=>{});
+    const show = () => {
+      v.classList.add('on');
+      for (const k in vids){
+        const o = vids[k];
+        if (o !== v) setTimeout(() => { if (active === v){ o.classList.remove('on'); o.pause(); } }, 110);
+      }
+    };
+    if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(show); else v.addEventListener('playing', show, {once:true});
+    active = v; activeSide = side; queued = null;
+
+    clearTimeout(shakeT);
+    shakeT = setTimeout(() => {
+      media.classList.remove('hit-l','hit-r'); void media.offsetWidth;
+      media.classList.add(side === 'L' ? 'hit-l' : 'hit-r');
+      hits++; countEl.textContent = `HITS × ${hits}`; countEl.classList.add('show');
+    }, CLIP[side].impact * 1000);
+  }
+  for (const k in vids){
+    const v = vids[k];
+    // a queued punch fires as soon as the current one starts coming back
+    const check = () => {
+      if (queued && v === active && v.currentTime >= CLIP[k].ret){ const s = queued; queued = null; punch(s); }
+      if (v === active && !v.paused && 'requestVideoFrameCallback' in v) v.requestVideoFrameCallback(check);
+    };
+    v.addEventListener('play', () => { if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(check); });
+    v.addEventListener('timeupdate', check);
+    v.addEventListener('ended', () => {
+      if (v !== active) return;
+      if (queued){ const s = queued; queued = null; punch(s); return; }
+      // last frame ≈ idle pose: fade the punch layer away, revealing the laughing loop underneath
+      v.style.transition = `opacity ${FADE_OUT}ms ease-out`;
+      v.classList.remove('on');
+      active = null; activeSide = null;
+      setTimeout(() => { if (active !== v) v.style.transition = ''; }, FADE_OUT + 20);
+    });
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    if (e.button && e.button !== 0) return;
+    punch(sideAt(e.clientX));
+    cursor.classList.add('down');
+    cursor.classList.remove('pulse'); void cursor.offsetWidth; cursor.classList.add('pulse');
+  });
+  addEventListener('pointerup', () => cursor.classList.remove('down'));
+  addEventListener('keydown', e => {
+    if (e.repeat) return;
+    if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') punch('L');
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') punch('R');
+  });
+
+  // ---------- cursor: tracks the pointer exactly, painted once per frame ----------
+  let cx = -100, cy = -100, dirty = false;
+  addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch') return;
+    cx = e.clientX; cy = e.clientY; cursor.classList.add('show');
+    if (!dirty){ dirty = true; requestAnimationFrame(() => { cursor.style.transform = `translate3d(${cx}px,${cy}px,0)`; dirty = false; }); }
+  }, {passive:true});
+  document.documentElement.addEventListener('mouseleave', () => cursor.classList.remove('show'));
+})();
+</script>
+</body>
+</html>
